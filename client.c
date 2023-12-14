@@ -33,30 +33,41 @@ int main() {
             return -1;
         }
 
-        while (1) {
+        int gameFinished = 0;
+
+        while (!gameFinished) {
             int valread = read(sock, buffer, 1024);
             if (valread <= 0) {
-                printf("Connection closed by the server.\n");
-                break;
+                printf("Erreur de connexion avec le serveur.\n");
+                close(sock);
+                return -1;
             }
 
             buffer[valread] = '\0';
-            printf("Mot à trouver: %s\n", buffer);
 
+            // Check if the game is finished
             if (strcmp(buffer, "You've guessed the word!\n") == 0) {
+                printf("%s", buffer);
+                gameFinished = 1;
                 break;
+            } else {
+                // Print the updated word or response from server
+                printf("%s\n", buffer);
             }
 
-            printf("Entrez une lettre: ");
-            scanf(" %c", &guess[0]);
-            send(sock, guess, 1, 0);
+            if (!gameFinished) {
+                printf("Entrez une lettre: ");
+                scanf(" %c", &guess[0]); // Using %c to read a single character
+                send(sock, guess, 1, 0); // Sending only one character
+            }
         }
 
-        printf("Voulez-vous jouer une autre partie? (y/n): ");
-        scanf(" %c", &choice[0]);
+        close(sock);
 
-        close(sock); // Fermeture du socket
-
+        if (gameFinished) {
+            printf("Voulez-vous jouer une autre partie? (y/n): ");
+            scanf(" %c", &choice[0]); // Using %c to read a single character
+        }
     } while (choice[0] == 'y' || choice[0] == 'Y');
 
     return 0;

@@ -21,13 +21,14 @@ void pickRandomWord(char *word, const char *filename) {
     }
 
     while (fgets(line, sizeof(line), file)) {
-        line[strcspn(line, "\n")] = 0;
+        line[strcspn(line, "\n")] = 0; // Remove newline
         wordList[wordCount] = strdup(line);
         wordCount++;
     }
 
     strcpy(word, wordList[rand() % wordCount]);
 
+    // Free the memory allocated for wordList
     for (int i = 0; i < wordCount; i++) {
         free(wordList[i]);
     }
@@ -36,20 +37,23 @@ void pickRandomWord(char *word, const char *filename) {
 }
 
 int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
+    int server_fd, new_socket, valread;
+    struct sockaddr_in address, client_addr;
     int opt = 1;
-    int addrlen = sizeof(address);
+    int addrlen = sizeof(client_addr);
     char buffer[1024] = {0};
     char word[100], hiddenWord[100];
+    int i, correct;
 
     srand(time(0));
 
+    // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
-
+      
+    // Forcefully attaching socket to the port 8080
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
         perror("setsockopt");
         exit(EXIT_FAILURE);
@@ -68,48 +72,46 @@ int main() {
     }
 
     while (1) {
-        new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
+        new_socket = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
         if (new_socket < 0) {
             perror("accept");
-            continue;
+            continue; // Continue to the next iteration to keep listening
         }
 
-        printf("Client connected: %s\n", inet_ntoa(address.sin_addr));
+        printf("Client connected: %s\n", inet_ntoa(client_addr.sin_addr));
+
         pickRandomWord(word, "mots.txt");
         printf("Word to guess: %s\n", word);
 
-        for (int i = 0; word[i] != '\0'; i++) {
+        for(i = 0; word[i] != '\0'; i++) {
             hiddenWord[i] = '_';
         }
-        hiddenWord[strlen(word)] = '\0';
+        hiddenWord[i] = '\0';
 
-        while (1) {
-            int valread = read(new_socket, buffer, 1024);
+        while(strcmp(hiddenWord, word) != 0) {
+            send(new_socket, hiddenWord, strlen(hiddenWord), 0);
+            valread = read(new_socket, buffer, 1024);
             if (valread <= 0) {
-                printf("Client disconnected: %s\n", inet_ntoa(address.sin_addr));
-                close(new_socket);
-                break;
+                printf("Client disconnected\n");
+                break; // Break out of the loop if client disconnects
             }
-
             buffer[valread] = '\0';
-            int correct = 0;
-            for (int i = 0; word[i] != '\0'; i++) {
-                if (word[i] == buffer[0]) {
+
+            correct = 0;
+            for(i = 0; word[i] != '\0'; i++) {
+                if(word[i] == buffer[0]) {
                     hiddenWord[i] = buffer[0];
                     correct = 1;
                 }
             }
+        }
 
-            if (strcmp(hiddenWord, word) == 0) {
-                send(new_socket, "You've guessed the word!\n", strlen("You've guessed the word!\n"), 0);
-                close(new_socket);
-                break;
-            }
-
-            send(new_socket, hiddenWord, strlen(hiddenWord), 0);
+        if (strcmp(hiddenWord, word) == 0) {
+            send(new_socket, "You've guessed the word!\n", strlen("You've guessed the word!\n"), 0);
+            close(new_socket); // Close the connection once the game is over
         }
     }
 
+    // close(server_fd); // This line is unreachable due to the infinite loop
     return 0;
 }
-
